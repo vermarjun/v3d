@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Video3D</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffb547' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M12 2 3 7v10l9 5 9-5V7z'/%3E%3Cpath d='m3 7 9 5 9-5M12 12v10'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three/three.module.min.js",
+      "three/addons/": "./vendor/three/addons/",
+      "three-mesh-bvh": "./vendor/three-mesh-bvh/three-mesh-bvh.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <!-- Gallery + drop zone -->
+  <main id="home" class="view" hidden>
+    <header class="brand">
+      <div class="logo" data-icon="cube"></div>
+      <div>
+        <h1>Video3D</h1>
+        <p>Phone video in, metric 3D scene out.</p>
+      </div>
+    </header>
+    <label id="drop" class="drop" tabindex="0">
+      <input id="file" type="file" accept="video/*,image/jpeg,image/png" multiple hidden>
+      <div class="drop-icon" data-icon="upload"></div>
+      <div class="drop-title">Drop a video or photos</div>
+      <div class="drop-sub">or click to choose · a 5–20 s slow orbit, or 10–40 photos taken walking around the scene</div>
+    </label>
+    <section>
+      <div class="section-head"><h2>Scenes</h2><span id="gallery-note" class="muted"></span></div>
+      <div id="gallery" class="gallery"></div>
+    </section>
+  </main>
+
+  <!-- Reconstruction progress -->
+  <main id="progress" class="view" hidden>
+    <div class="progress-card panel">
+      <div class="preview">
+        <video id="preview-video" muted loop playsinline autoplay></video>
+        <img id="preview-img" alt="" hidden>
+        <div class="preview-shade"></div>
+        <div id="progress-name" class="preview-name"></div>
+      </div>
+      <ol id="stages" class="stages">
+        <li data-stage="0"><span class="st-icon"></span><div><b>Uploading</b><small>Sending the video</small></div></li>
+        <li data-stage="1"><span class="st-icon"></span><div><b>Reconstructing on GPU</b><small>MapAnything regresses metric depth for every frame</small></div></li>
+        <li data-stage="2"><span class="st-icon"></span><div><b>Cleaning up</b><small>Gravity-align, remove flying pixels, centre</small></div></li>
+        <li data-stage="3"><span class="st-icon"></span><div><b>Ready</b><small>Opening the 3D scene</small></div></li>
+      </ol>
+      <div class="bar"><div id="progress-bar"></div></div>
+      <div class="progress-foot">
+        <span id="stage-message" class="muted">Starting…</span>
+        <span id="elapsed" class="muted mono">0:00</span>
+      </div>
+      <div id="progress-error" class="error" hidden></div>
+      <div class="progress-actions"><button id="progress-back" class="btn ghost">Back to scenes</button></div>
+    </div>
+  </main>
+
+  <!-- 3D viewer -->
+  <div id="stage" class="view" hidden>
+    <div class="vignette"></div>
+    <div id="loading" class="loading"><div class="spinner"></div><div id="loading-text">Loading scene…</div></div>
+
+    <aside id="hud" class="panel hud">
+      <button id="back" class="icon-btn" title="Back to scenes" data-icon="back"></button>
+      <div class="hud-body">
+        <div id="hud-name" class="hud-name"></div>
+        <div id="hud-rows" class="hud-rows"></div>
+      </div>
+    </aside>
+
+    <aside id="mpanel" class="panel mpanel" hidden>
+      <div class="mp-head"><b>Measurements</b>
+        <div class="mp-actions">
+          <button id="m-undo" class="btn small ghost" title="Undo (⌫)">Undo</button>
+          <button id="m-clear" class="btn small ghost" title="Clear all">Clear</button>
+        </div>
+      </div>
+      <div id="m-hint" class="muted mp-hint">Click two points on a surface.</div>
+      <ol id="m-list" class="mlist"></ol>
+      <div id="m-cal" class="mcal" hidden>
+        <div class="muted">Real length of <b id="m-cal-name"></b></div>
+        <div class="mcal-row">
+          <input id="m-cal-value" type="number" step="any" min="0" placeholder="29.7">
+          <select id="m-cal-unit"><option value="0.01">cm</option><option value="1">m</option><option value="0.001">mm</option></select>
+          <button id="m-cal-apply" class="btn accent">Calibrate</button>
+        </div>
+      </div>
+    </aside>
+
+    <nav id="toolbar" class="panel toolbar">
+      <div class="group">
+        <button data-tool="orbit" title="Orbit (O)" data-icon="orbit"><span>Orbit</span></button>
+        <button data-tool="walk" title="Walk: WASD + mouse, Esc to exit (P)" data-icon="walk"><span>Walk</span></button>
+        <button data-tool="measure" title="Measure (M)" data-icon="ruler"><span>Measure</span></button>
+      </div>
+      <div class="sep"></div>
+      <div class="group">
+        <button data-toggle="dims" title="Dimensions (B)" data-icon="box"><span>Size</span></button>
+        <button data-toggle="grid" title="Metre grid (G)" data-icon="grid"><span>Grid</span></button>
+      </div>
+      <div class="sep"></div>
+      <div class="group seg">
+        <button data-mode="mesh" title="Mesh (1)"><span>Mesh</span></button>
+        <button data-mode="points" title="Points (2)"><span>Points</span></button>
+        <button data-mode="photoreal" title="Photoreal splats (3)" hidden><span>Photoreal</span></button>
+      </div>
+      <div class="sep"></div>
+      <div class="group">
+        <button data-action="reset" title="Reset view (R)" data-icon="reset"><span>Reset</span></button>
+        <button data-action="fly" title="Fly through the recorded path (F)" data-icon="play" hidden><span>Fly</span></button>
+      </div>
+    </nav>
+
+    <div id="hint" class="hint">Drag to orbit · Scroll to zoom · Shift-drag to pan · Double-click to focus</div>
+    <div id="walk-hint" class="hint walk" hidden>WASD to move · Shift to run · Q/E down/up · Mouse to look · <b>Esc</b> to exit</div>
+  </div>
+
+  <div id="dragover" class="dragover" hidden><div>Drop the video to reconstruct it</div></div>
+  <div id="toast" class="toast" hidden></div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

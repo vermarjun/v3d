@@ -1,0 +1,19 @@
+data/
+fixtures/*.glb
+.venv/
+__pycache__/
+*.pyc
+.env
+server/.env
+node_modules/
+.DS_Store
+demo/
+tools/brush/
+target/
+tools/brush/
+.orchestra/shots/*.png
+
+# not published
+presentation/
+.orchestra/
+CONTRACT.md
